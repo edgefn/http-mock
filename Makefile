@@ -22,5 +22,5 @@ build: ## 编译检查
 run: ## 启动 http-mock 服务
 	go run ./cmd/http-mock serve --routes "$(ROUTES)" --data-root "$(DATA_ROOT)" --listen "$(LISTEN)"
 
-validate: ## 校验 profile 和 fixture
+validate: ## 校验 routes.yaml 和 responses/*
 	go run ./cmd/http-mock validate --routes "$(ROUTES)" --data-root "$(DATA_ROOT)"
