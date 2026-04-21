@@ -128,7 +128,7 @@ make build
 | `response_file` | 是 | 响应文件路径；相对路径基于 `--data-root` 解析 |
 | `content_type` | 否 | 响应 `Content-Type`，为空时根据扩展名推断 |
 | `status_code` | 否 | 响应状态码，默认 `200` |
-| `match` | 否 | 额外匹配条件，支持 header 或 JSONPath |
+| `match` | 否 | 额外匹配条件，支持 header、query 或 JSONPath |
 
 路径支持精确匹配：
 
@@ -182,6 +182,19 @@ routes:
       equals: error
     response_file: v1/responses/error.json
     status_code: 500
+```
+
+按 query 匹配，适合 Gemini native 流式接口这类 `?alt=sse` 请求。`path` 只写 URL path，不写 query：
+
+```yaml
+routes:
+  - path: /v1beta/models/{model}:streamGenerateContent
+    method: POST
+    match:
+      query: alt
+      equals: sse
+    response_file: v1beta/models/{model}:streamGenerateContent/text_real.sse
+    content_type: text/event-stream
 ```
 
 ## 响应文件

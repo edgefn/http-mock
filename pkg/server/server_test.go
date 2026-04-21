@@ -32,11 +32,21 @@ routes:
     method: POST
     response_file: v1beta/models/{model}:generateContent/text_mock.json
     content_type: application/json
+  - path: /v1beta/models/{model}:streamGenerateContent
+    method: POST
+    match:
+      query: alt
+      equals: sse
+    response_file: v1beta/models/{model}:streamGenerateContent/text_mock.sse
+    content_type: text/event-stream
 `)
 	writeFile(t, filepath.Join(dataRoot, "responses", "chat.sse"), "data: hello\n\ndata: [DONE]\n\n")
 	writeFile(t, filepath.Join(dataRoot, "responses", "chat.json"), `{"reply":"ok"}`)
 	writeBinary(t, filepath.Join(dataRoot, "responses", "audio.mp3"), []byte{0x01, 0x02, 0x03})
 	writeFile(t, filepath.Join(dataRoot, "v1beta", "models", "{model}:generateContent", "text_mock.json"), `{"candidates":[{"content":{"parts":[{"text":"hello from gemini"}]}}]}`)
+	writeFile(t, filepath.Join(dataRoot, "v1beta", "models", "{model}:streamGenerateContent", "text_mock.sse"), `data: {"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}
+
+`)
 
 	srv, err := Load(dataRoot, "routes.yaml")
 	if err != nil {
@@ -72,6 +82,20 @@ routes:
 	srv.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "hello from gemini") {
 		t.Fatalf("unexpected gemini response code=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse", strings.NewReader(`{"contents":[]}`))
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "data:") {
+		t.Fatalf("unexpected gemini stream response code=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:streamGenerateContent", strings.NewReader(`{"contents":[]}`))
+	srv.ServeHTTP(rec, req)
+	if got, want := rec.Code, http.StatusNotFound; got != want {
+		t.Fatalf("gemini stream without alt code=%d want=%d", got, want)
 	}
 
 	rec = httptest.NewRecorder()

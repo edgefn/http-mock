@@ -22,16 +22,24 @@ routes:
   - path: /v1/chat/completions
     method: POST
     response_file: responses/chat.json
+  - path: /v1beta/models/{model}:streamGenerateContent
+    method: POST
+    match:
+      query: alt
+      equals: sse
+    response_file: responses/gemini.sse
+    content_type: text/event-stream
 `)
 	writeFile(t, filepath.Join(dataRoot, "responses", "chat.sse"), "data: hello\n\n")
 	writeFile(t, filepath.Join(dataRoot, "responses", "chat.json"), `{"ok":true}`)
+	writeFile(t, filepath.Join(dataRoot, "responses", "gemini.sse"), "data: {}\n\n")
 
 	cfg, _, err := Load(dataRoot, "routes.yaml")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got := len(cfg.Routes); got != 2 {
-		t.Fatalf("routes=%d want=2", got)
+	if got := len(cfg.Routes); got != 3 {
+		t.Fatalf("routes=%d want=3", got)
 	}
 	if got, want := cfg.Routes[1].ContentType, "application/json"; got != want {
 		t.Fatalf("content_type=%q want=%q", got, want)
@@ -46,6 +54,19 @@ routes:
 	}
 	if !cfg.Routes[0].Allows(req, []byte(`{"stream":true}`)) {
 		t.Fatalf("stream route should match true")
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse", nil)
+	if !cfg.Routes[2].Allows(req, []byte(`{"contents":[]}`)) {
+		t.Fatalf("query route should match alt=sse")
+	}
+	req = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:streamGenerateContent", nil)
+	if cfg.Routes[2].Allows(req, []byte(`{"contents":[]}`)) {
+		t.Fatalf("query route should not match without alt=sse")
+	}
+	req = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=json", nil)
+	if cfg.Routes[2].Allows(req, []byte(`{"contents":[]}`)) {
+		t.Fatalf("query route should not match a different alt value")
 	}
 }
 

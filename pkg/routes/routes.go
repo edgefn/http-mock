@@ -28,6 +28,7 @@ type Route struct {
 
 type Match struct {
 	Header   string `yaml:"header"`
+	Query    string `yaml:"query"`
 	JSONPath string `yaml:"json_path"`
 	Equals   string `yaml:"equals"`
 }
@@ -99,8 +100,8 @@ func (m *Match) validate(index int) error {
 	if m == nil {
 		return nil
 	}
-	if strings.TrimSpace(m.Header) == "" && strings.TrimSpace(m.JSONPath) == "" {
-		return fmt.Errorf("routes[%d].match must define header or json_path", index)
+	if strings.TrimSpace(m.Header) == "" && strings.TrimSpace(m.Query) == "" && strings.TrimSpace(m.JSONPath) == "" {
+		return fmt.Errorf("routes[%d].match must define header, query, or json_path", index)
 	}
 	if strings.TrimSpace(m.Equals) == "" {
 		return fmt.Errorf("routes[%d].match.equals is required", index)
@@ -132,6 +133,8 @@ func (m *Match) Matches(req *http.Request, body []byte) bool {
 	var value string
 	if header := strings.TrimSpace(m.Header); header != "" {
 		value = req.Header.Get(header)
+	} else if query := strings.TrimSpace(m.Query); query != "" {
+		value = req.URL.Query().Get(query)
 	} else {
 		result := gjson.GetBytes(body, m.JSONPath)
 		if !result.Exists() {
