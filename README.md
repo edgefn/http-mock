@@ -5,7 +5,7 @@
 对外只保留两层概念：
 
 - `routes.yaml`：声明路径、方法、可选匹配规则、返回文件
-- `responses/`：真实返回内容，像 ONR 的 `testdata`
+- 数据根目录下的响应文件：可按 endpoint 组织，例如 `v1/chat/completions/multimodal_real.json`
 
 常用命令：
 

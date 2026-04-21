@@ -1,0 +1,42 @@
+version: 2
+
+project_name: http-mock
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: http-mock
+    main: ./cmd/http-mock
+    binary: http-mock
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+
+release:
+  github:
+    owner: edgefn
+    name: http-mock
