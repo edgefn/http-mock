@@ -130,6 +130,8 @@ make build
 | `status_code` | 否 | 响应状态码，默认 `200` |
 | `match` | 否 | 额外匹配条件，支持 header、query 或 JSONPath |
 
+服务会在请求进入时检查 `routes.yaml` 的修改时间；文件变更后会懒加载新路由，加载失败时继续沿用上一份可用配置并记录日志。`response_file` 内容每次请求都会重新读取。
+
 路径支持精确匹配：
 
 ```yaml

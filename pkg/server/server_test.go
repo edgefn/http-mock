@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestServer_ServesJSONSSEAndBinary(t *testing.T) {
@@ -106,6 +107,93 @@ routes:
 	}
 }
 
+func TestServer_ReloadsRoutesWhenFileChanges(t *testing.T) {
+	dataRoot := t.TempDir()
+	routesPath := filepath.Join(dataRoot, "routes.yaml")
+	writeFile(t, routesPath, `
+routes:
+  - path: /v1/responses
+    method: POST
+    response_file: responses/ok.json
+    content_type: application/json
+`)
+	writeFile(t, filepath.Join(dataRoot, "responses", "ok.json"), `{"reply":"ok"}`)
+	writeFile(t, filepath.Join(dataRoot, "responses", "error.json"), `{"error":"retry later"}`)
+
+	srv, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{}`))
+	srv.ServeHTTP(rec, req)
+	if got, want := rec.Code, http.StatusOK; got != want {
+		t.Fatalf("initial code=%d want=%d", got, want)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"reply":"ok"}` {
+		t.Fatalf("initial body=%q", got)
+	}
+
+	writeFile(t, routesPath, `
+routes:
+  - path: /v1/responses
+    method: POST
+    response_file: responses/error.json
+    content_type: application/json
+    status_code: 503
+`)
+	forceModTime(t, routesPath, time.Now().Add(2*time.Second))
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{}`))
+	srv.ServeHTTP(rec, req)
+	if got, want := rec.Code, http.StatusServiceUnavailable; got != want {
+		t.Fatalf("reloaded code=%d want=%d", got, want)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"error":"retry later"}` {
+		t.Fatalf("reloaded body=%q", got)
+	}
+}
+
+func TestServer_KeepsPreviousRoutesWhenReloadFails(t *testing.T) {
+	dataRoot := t.TempDir()
+	routesPath := filepath.Join(dataRoot, "routes.yaml")
+	writeFile(t, routesPath, `
+routes:
+  - path: /v1/responses
+    method: POST
+    response_file: responses/ok.json
+    content_type: application/json
+`)
+	writeFile(t, filepath.Join(dataRoot, "responses", "ok.json"), `{"reply":"ok"}`)
+
+	srv, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	writeFile(t, routesPath, `
+routes:
+  - path: /v1/responses
+    method: POST
+    response_file: responses/missing.json
+    content_type: application/json
+    status_code: 503
+`)
+	forceModTime(t, routesPath, time.Now().Add(2*time.Second))
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{}`))
+	srv.ServeHTTP(rec, req)
+	if got, want := rec.Code, http.StatusOK; got != want {
+		t.Fatalf("code after failed reload=%d want=%d", got, want)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"reply":"ok"}` {
+		t.Fatalf("body after failed reload=%q", got)
+	}
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -123,5 +211,12 @@ func writeBinary(t *testing.T, path string, content []byte) {
 	}
 	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatalf("WriteFile(%s): %v", path, err)
+	}
+}
+
+func forceModTime(t *testing.T, path string, modTime time.Time) {
+	t.Helper()
+	if err := os.Chtimes(path, modTime, modTime); err != nil {
+		t.Fatalf("Chtimes(%s): %v", path, err)
 	}
 }
