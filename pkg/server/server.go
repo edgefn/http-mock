@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -68,7 +69,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !route.Allows(r, body) {
 			continue
 		}
-		if err := serveRoute(w, route); err != nil {
+		if err := serveRoute(w, r, route); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
@@ -122,18 +123,90 @@ func (s *Server) routesSnapshot() []routes.Route {
 	return s.routes
 }
 
-func serveRoute(w http.ResponseWriter, route routes.Route) error {
-	body, err := os.ReadFile(route.ResponsePath())
+func serveRoute(w http.ResponseWriter, r *http.Request, route routes.Route) error {
+	if ok := waitBeforeResponse(r, route); !ok {
+		return nil
+	}
+
+	body, err := responseBody(route)
 	if err != nil {
 		return err
 	}
 	if route.ContentType != "" {
 		w.Header().Set("Content-Type", route.ContentType)
 	}
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+	for name, value := range route.Headers {
+		w.Header().Set(name, value)
+	}
+	if route.StreamDelayDuration() <= 0 || !IsStreamContentType(route.ContentType) {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(body)))
+	}
 	w.WriteHeader(route.StatusCode)
+	if route.StreamDelayDuration() > 0 && IsStreamContentType(route.ContentType) {
+		return writeStreamBody(w, r, body, route.StreamDelayDuration())
+	}
 	_, err = w.Write(body)
 	return err
+}
+
+func waitBeforeResponse(r *http.Request, route routes.Route) bool {
+	delay := route.DelayDuration() + randomDelay(route)
+	if delay <= 0 {
+		return true
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-r.Context().Done():
+		return false
+	}
+}
+
+func randomDelay(route routes.Route) time.Duration {
+	min, max, ok := route.RandomDelayRange()
+	if !ok {
+		return 0
+	}
+	if max <= min {
+		return min
+	}
+	return min + time.Duration(rand.Int63n(int64(max-min)+1))
+}
+
+func responseBody(route routes.Route) ([]byte, error) {
+	if body, ok := route.InlineBody(); ok {
+		return []byte(body), nil
+	}
+	return os.ReadFile(route.ResponsePath())
+}
+
+func writeStreamBody(w http.ResponseWriter, r *http.Request, body []byte, delay time.Duration) error {
+	flusher, _ := w.(http.Flusher)
+	chunks := bytes.SplitAfter(body, []byte("\n\n"))
+	for i, chunk := range chunks {
+		if len(chunk) == 0 {
+			continue
+		}
+		if i > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-timer.C:
+			case <-r.Context().Done():
+				timer.Stop()
+				return nil
+			}
+			timer.Stop()
+		}
+		if _, err := w.Write(chunk); err != nil {
+			return err
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+	}
+	return nil
 }
 
 func IsStreamContentType(contentType string) bool {

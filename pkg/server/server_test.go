@@ -194,6 +194,93 @@ routes:
 	}
 }
 
+func TestServer_ResponseBehaviorFields(t *testing.T) {
+	dataRoot := t.TempDir()
+	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
+routes:
+  - path: /slow-inline
+    method: GET
+    body_inline: '{"ok":true}'
+    content_type: application/json
+    headers:
+      X-Mock-Case: slow-inline
+    delay: 15ms
+    random_delay:
+      min: 10ms
+      max: 10ms
+`)
+
+	srv, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/slow-inline", nil)
+	start := time.Now()
+	srv.ServeHTTP(rec, req)
+	elapsed := time.Since(start)
+
+	if got, want := rec.Code, http.StatusOK; got != want {
+		t.Fatalf("code=%d want=%d", got, want)
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"ok":true}` {
+		t.Fatalf("body=%q want inline body", got)
+	}
+	if got := rec.Header().Get("X-Mock-Case"); got != "slow-inline" {
+		t.Fatalf("X-Mock-Case=%q want slow-inline", got)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type=%q want application/json", got)
+	}
+	if elapsed < 25*time.Millisecond {
+		t.Fatalf("elapsed=%s want at least 25ms", elapsed)
+	}
+}
+
+func TestServer_StreamDelayWritesSSEChunks(t *testing.T) {
+	dataRoot := t.TempDir()
+	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
+routes:
+  - path: /stream
+    method: GET
+    body_inline: |
+      data: one
+
+      data: two
+
+    content_type: text/event-stream
+    stream_delay: 20ms
+`)
+
+	srv, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/stream", nil)
+	start := time.Now()
+	srv.ServeHTTP(rec, req)
+	elapsed := time.Since(start)
+
+	if got, want := rec.Code, http.StatusOK; got != want {
+		t.Fatalf("code=%d want=%d", got, want)
+	}
+	if got := rec.Header().Get("Content-Length"); got != "" {
+		t.Fatalf("Content-Length=%q want empty for delayed stream", got)
+	}
+	if got := rec.Body.String(); !strings.Contains(got, "data: one") || !strings.Contains(got, "data: two") {
+		t.Fatalf("body=%q want both stream events", got)
+	}
+	if elapsed < 20*time.Millisecond {
+		t.Fatalf("elapsed=%s want at least 20ms", elapsed)
+	}
+	if !rec.Flushed {
+		t.Fatalf("recorder should be flushed for delayed stream")
+	}
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

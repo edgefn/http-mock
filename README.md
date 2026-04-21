@@ -24,6 +24,7 @@
 - 路由简单：支持精确路径和 `{param}` path segment 模板。
 - 请求匹配：支持按请求 header 或 JSONPath 选择不同 mock 响应。
 - 内容类型推断：内置 `.json`、`.sse`、`.mp3` 的常见 content type。
+- 响应行为：支持固定延迟、随机延迟、自定义响应 header、内联响应体和 SSE 事件间隔。
 - 配置校验：启动前检查 `routes.yaml` 和响应文件是否存在。
 - 容器友好：提供 Dockerfile，可直接构建镜像运行。
 
@@ -125,9 +126,14 @@ make build
 | --- | --- | --- |
 | `path` | 是 | 请求路径，必须以 `/` 开头 |
 | `method` | 否 | HTTP 方法，默认 `GET`，会统一转为大写 |
-| `response_file` | 是 | 响应文件路径；相对路径基于 `--data-root` 解析 |
+| `response_file` | 否 | 响应文件路径；相对路径基于 `--data-root` 解析。未配置 `body_inline` 时必填 |
+| `body_inline` | 否 | 直接在 route 内声明响应体，适合很短的错误响应；和 `response_file` 二选一 |
 | `content_type` | 否 | 响应 `Content-Type`，为空时根据扩展名推断 |
 | `status_code` | 否 | 响应状态码，默认 `200` |
+| `headers` | 否 | 自定义响应 header |
+| `delay` | 否 | 固定响应延迟，使用 Go duration 格式，例如 `500ms`、`60s` |
+| `random_delay` | 否 | 额外随机响应延迟，包含 `min` 和 `max`，会叠加在 `delay` 后 |
+| `stream_delay` | 否 | SSE 响应的事件间隔，使用 Go duration 格式，仅对 `text/event-stream` 生效 |
 | `match` | 否 | 额外匹配条件，支持 header、query 或 JSONPath |
 
 服务会在请求进入时检查 `routes.yaml` 的修改时间；文件变更后会懒加载新路由，加载失败时继续沿用上一份可用配置并记录日志。`response_file` 内容每次请求都会重新读取。
@@ -199,7 +205,7 @@ routes:
     content_type: text/event-stream
 ```
 
-## 响应文件
+## 响应内容
 
 `response_file` 可以指向任意本地文件。常见扩展名会自动推断 content type：
 
@@ -210,6 +216,67 @@ routes:
 | `.mp3` | `audio/mpeg` |
 
 其他扩展名默认使用 `application/octet-stream`。如果需要固定 content type，请在 route 中显式设置 `content_type`。
+
+很短的响应也可以直接写在 route 中：
+
+```yaml
+routes:
+  - path: /__case/inline-error/v1/responses
+    method: POST
+    status_code: 429
+    body_inline: '{"error":{"message":"rate limited by http-mock"}}'
+    content_type: application/json
+```
+
+## 响应行为
+
+固定延迟适合模拟上游慢响应：
+
+```yaml
+routes:
+  - path: /__case/slow/v1/chat/completions
+    method: POST
+    delay: 60s
+    response_file: v1/chat/completions/mock.json
+    content_type: application/json
+```
+
+随机延迟会叠加在 `delay` 之后，适合模拟网络抖动：
+
+```yaml
+routes:
+  - path: /__case/jitter/v1/chat/completions
+    method: POST
+    delay: 200ms
+    random_delay:
+      min: 100ms
+      max: 2s
+    response_file: v1/chat/completions/mock.json
+    content_type: application/json
+```
+
+自定义响应 header：
+
+```yaml
+routes:
+  - path: /__case/header/v1/responses
+    method: POST
+    headers:
+      X-Mock-Case: header
+    response_file: v1/responses/mock.json
+    content_type: application/json
+```
+
+SSE 响应可以按 event 块分段写出。`stream_delay` 会在相邻 SSE event 之间等待：
+
+```yaml
+routes:
+  - path: /__case/slow-stream/v1/chat/completions
+    method: POST
+    response_file: v1/chat/completions/stream.sse
+    content_type: text/event-stream
+    stream_delay: 1s
+```
 
 ## 错误码
 
