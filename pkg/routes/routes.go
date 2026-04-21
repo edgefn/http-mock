@@ -109,7 +109,7 @@ func (m *Match) validate(index int) error {
 }
 
 func (r *Route) Allows(req *http.Request, body []byte) bool {
-	if req.URL.Path != r.Path {
+	if !r.MatchesPath(req.URL.Path) {
 		return false
 	}
 	if req.Method != r.Method {
@@ -119,6 +119,10 @@ func (r *Route) Allows(req *http.Request, body []byte) bool {
 		return true
 	}
 	return r.Match.Matches(req, body)
+}
+
+func (r Route) MatchesPath(path string) bool {
+	return matchPathPattern(r.Path, path)
 }
 
 func (m *Match) Matches(req *http.Request, body []byte) bool {
@@ -139,6 +143,65 @@ func (m *Match) Matches(req *http.Request, body []byte) bool {
 		}
 	}
 	return value == m.Equals
+}
+
+func matchPathPattern(pattern string, path string) bool {
+	if !strings.Contains(pattern, "{") {
+		return pattern == path
+	}
+
+	patternSegments := strings.Split(pattern, "/")
+	pathSegments := strings.Split(path, "/")
+	if len(patternSegments) != len(pathSegments) {
+		return false
+	}
+	for i := range patternSegments {
+		if !matchPathSegment(patternSegments[i], pathSegments[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func matchPathSegment(pattern string, value string) bool {
+	for pattern != "" {
+		open := strings.IndexByte(pattern, '{')
+		if open < 0 {
+			return pattern == value
+		}
+		if open > 0 {
+			literal := pattern[:open]
+			if !strings.HasPrefix(value, literal) {
+				return false
+			}
+			pattern = pattern[open:]
+			value = value[len(literal):]
+			continue
+		}
+
+		close := strings.IndexByte(pattern, '}')
+		if close <= 1 {
+			return false
+		}
+		pattern = pattern[close+1:]
+		if pattern == "" {
+			return value != ""
+		}
+		nextOpen := strings.IndexByte(pattern, '{')
+		if nextOpen == 0 {
+			return false
+		}
+		literal := pattern
+		if nextOpen > 0 {
+			literal = pattern[:nextOpen]
+		}
+		next := strings.Index(value, literal)
+		if next <= 0 {
+			return false
+		}
+		value = value[next:]
+	}
+	return value == ""
 }
 
 func (r *Route) ResponsePath() string {

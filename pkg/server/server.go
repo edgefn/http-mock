@@ -35,7 +35,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var pathMatched bool
 	var methodMatched bool
 	for _, route := range s.routes {
-		if route.Path != r.URL.Path {
+		if !route.MatchesPath(r.URL.Path) {
 			continue
 		}
 		pathMatched = true

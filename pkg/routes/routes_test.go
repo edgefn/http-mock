@@ -49,6 +49,26 @@ routes:
 	}
 }
 
+func TestRouteMatchesTemplatePath(t *testing.T) {
+	route := Route{Path: "/v1beta/models/{model}:generateContent"}
+
+	if !route.MatchesPath("/v1beta/models/gemini-2.5-flash:generateContent") {
+		t.Fatalf("template route should match gemini generateContent path")
+	}
+	if route.MatchesPath("/v1beta/models/:generateContent") {
+		t.Fatalf("template route should not match empty model")
+	}
+	if route.MatchesPath("/v1beta/models/gemini-2.5-flash:streamGenerateContent") {
+		t.Fatalf("template route should not match a different action")
+	}
+	if route.MatchesPath("/v1beta/models/gemini/2.5-flash:generateContent") {
+		t.Fatalf("template route should not match across path segments")
+	}
+	if (Route{Path: "/v1/chat/completions"}).MatchesPath("/v1/chat/completion") {
+		t.Fatalf("exact route should keep exact path matching")
+	}
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

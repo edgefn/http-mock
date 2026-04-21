@@ -28,10 +28,15 @@ routes:
     method: POST
     response_file: responses/audio.mp3
     content_type: audio/mpeg
+  - path: /v1beta/models/{model}:generateContent
+    method: POST
+    response_file: v1beta/models/{model}:generateContent/text_mock.json
+    content_type: application/json
 `)
 	writeFile(t, filepath.Join(dataRoot, "responses", "chat.sse"), "data: hello\n\ndata: [DONE]\n\n")
 	writeFile(t, filepath.Join(dataRoot, "responses", "chat.json"), `{"reply":"ok"}`)
 	writeBinary(t, filepath.Join(dataRoot, "responses", "audio.mp3"), []byte{0x01, 0x02, 0x03})
+	writeFile(t, filepath.Join(dataRoot, "v1beta", "models", "{model}:generateContent", "text_mock.json"), `{"candidates":[{"content":{"parts":[{"text":"hello from gemini"}]}}]}`)
 
 	srv, err := Load(dataRoot, "routes.yaml")
 	if err != nil {
@@ -60,6 +65,13 @@ routes:
 	}
 	if got := rec.Body.Bytes(); len(got) != 3 || got[0] != 0x01 {
 		t.Fatalf("unexpected audio bytes: %v", got)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", strings.NewReader(`{"contents":[]}`))
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "hello from gemini") {
+		t.Fatalf("unexpected gemini response code=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
