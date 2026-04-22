@@ -19,18 +19,17 @@ env:
 jobs:
   test:
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    runs-on:
-      group: Default
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # - name: Setup Go
-      #   uses: actions/setup-go@v5
-      #   with:
-      #     go-version-file: go.mod
-      #     cache: true
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Test
         run: go test ./...
@@ -39,8 +38,7 @@ jobs:
         run: go build ./cmd/http-mock
 
   docker:
-    runs-on:
-      group: Default
+    runs-on: ubuntu-latest
     needs: test
     permissions:
       contents: read
