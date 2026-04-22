@@ -1,11 +1,6 @@
 name: CD Mock service
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -25,7 +20,7 @@ jobs:
       - name: deploy
         run: |
           # 下载最新版本
-          curl -xl -o /tmp/latest.tar.gz  https://github.com/edgefn/http-mock/releases/download/v${{ steps.get-tag.outputs.TAG }}/http-mock_${{ steps.get-tag.outputs.TAG }}_linux_amd64.tar.gz
+          curl -L -o /tmp/latest.tar.gz  https://github.com/edgefn/http-mock/releases/download/v${{ steps.get-tag.outputs.TAG }}/http-mock_${{ steps.get-tag.outputs.TAG }}_linux_amd64.tar.gz
           # 解压
           tar -xzvf /tmp/latest.tar.gz -C /home/github-runner/mock-data
           # 重启服务
