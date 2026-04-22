@@ -2,6 +2,7 @@ name: CD Mock service
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 jobs:
   deploy-to-dev:
@@ -22,7 +23,7 @@ jobs:
           # 下载最新版本
           curl -L -o /tmp/latest.tar.gz  https://github.com/edgefn/http-mock/releases/download/v${{ steps.get-tag.outputs.TAG }}/http-mock_${{ steps.get-tag.outputs.TAG }}_linux_amd64.tar.gz
           # 解压
-          tar -xzvf /tmp/latest.tar.gz -C /home/github-runner/mock-data
+          tar -xzvf /tmp/latest.tar.gz -C /home/github-runner/
           # 重启服务
           sudo systemctl restart http-mock
           echo "deploy done for test"
