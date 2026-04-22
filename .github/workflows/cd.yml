@@ -5,9 +5,8 @@ on:
   workflow_call:
 
 jobs:
-  deploy:
-    runs-on:
-      group: mock
+  deploy-to-dev:
+    runs-on: [ mock ]
 
     steps:
       - name: Checkout
