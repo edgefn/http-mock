@@ -1,6 +1,7 @@
 name: CD Mock service
 
 on:
+  workflow_dispatch:
   workflow_call:
 
 jobs:
@@ -9,6 +10,9 @@ jobs:
       group: mock
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
       - name: deploy
         run: |
           sudo systemctl restart http-mock
