@@ -1,10 +1,7 @@
 name: CD Mock service
 
 on:
-  workflow_run:
-    workflows: [ "Release", "CI" ]
-    types:
-      - completed
+  workflow_call:
 
 jobs:
   deploy:
