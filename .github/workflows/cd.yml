@@ -1,8 +1,12 @@
 name: CD Mock service
 
 on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
   workflow_dispatch:
-  workflow_call:
 
 jobs:
   deploy-to-dev:
@@ -11,17 +15,19 @@ jobs:
     steps:
 
       - name: Get latest tag via API
+        id: get-tag
         run: |
           TAG=$(curl -s https://api.github.com/repos/${{ github.repository }}/tags \
             |jq -r '.[0].name' | cut -d "v" -f 2 )
+          echo "TAG=$TAG"
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
       - name: deploy
         run: |
           # 下载最新版本
-          curl -xL -o /home/github-runner/latest.tar.gz  https://github.com/edgefn/http-mock/releases/download/v${{ steps.get-tag.outputs.TAG }}/http-mock_${{ steps.get-tag.outputs.TAG }}_linux_amd64.tar.gz
+          curl -xL -o /tmp/latest.tar.gz  https://github.com/edgefn/http-mock/releases/download/v${{ steps.get-tag.outputs.TAG }}/http-mock_${{ steps.get-tag.outputs.TAG }}_linux_amd64.tar.gz
           # 解压
-          tar -xzvf /home/github-runner/latest.tar.gz -C /home/github-runner/mock-data
+          tar -xzvf /tmp/latest.tar.gz -C /home/github-runner/mock-data
           # 重启服务
           sudo systemctl restart http-mock
           echo "deploy done for test"
