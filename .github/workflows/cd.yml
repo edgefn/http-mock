@@ -15,4 +15,4 @@ jobs:
       - name: deploy
         run: |
           sudo systemctl restart http-mock
-          echo "deploy done"
+          echo "deploy done for test"
