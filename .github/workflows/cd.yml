@@ -2,7 +2,7 @@ name: CD Mock service
 
 on:
   workflow_run:
-    workflow: [ "Release", "CI" ]
+    workflows: [ "Release", "CI" ]
     types:
       - completed
 
