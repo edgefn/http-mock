@@ -37,8 +37,8 @@ jobs:
       - name: Build
         run: go build ./cmd/http-mock
 
-      - name: call CD workflow
-        uses: edgefn/http-mock/.github/workflows/cd.yml@main
+  call_cd:
+    uses: edgefn/http-mock/.github/workflows/cd.yml@main
 
   docker:
     runs-on: ubuntu-latest
