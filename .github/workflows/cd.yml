@@ -1,0 +1,17 @@
+name: CD Mock service
+
+on:
+  workflow_run:
+    types: [ completed ]
+    workflow: "Release"
+
+jobs:
+  deploy:
+    runs-on:
+      group: mock
+
+    steps:
+      - name: deploy
+        run: |
+          sudo systemctl restart http-mock
+          echo "deploy done"

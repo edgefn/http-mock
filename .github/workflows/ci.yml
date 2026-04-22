@@ -19,7 +19,8 @@ env:
 jobs:
   test:
     if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
 
     steps:
       - name: Checkout
@@ -38,7 +39,8 @@ jobs:
         run: go build ./cmd/http-mock
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: Default
     needs: test
     permissions:
       contents: read
