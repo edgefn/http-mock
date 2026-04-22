@@ -9,10 +9,19 @@ jobs:
     runs-on: [ mock ]
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+
+      - name: Get latest tag via API
+        run: |
+          TAG=$(curl -s https://api.github.com/repos/${{ github.repository }}/tags \
+            |jq -r '.[0].name' | cut -d "v" -f 2 )
+          echo "TAG=$TAG" >> $GITHUB_ENV
 
       - name: deploy
         run: |
+          # 下载最新版本
+          curl -xL -o /home/github-runner/latest.tar.gz  https://github.com/edgefn/http-mock/releases/download/v${TAG}/http-mock_${TAG}_linux_amd64.tar.gz
+          # 解压
+          tar -xzvf /home/github-runner/latest.tar.gz -C /home/github-runner/mock-data
+          # 重启服务
           sudo systemctl restart http-mock
           echo "deploy done for test"
