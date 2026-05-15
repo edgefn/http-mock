@@ -254,7 +254,7 @@ func (m *Match) Matches(req *http.Request, body []byte) bool {
 }
 
 func matchPathPattern(pattern string, path string) bool {
-	if !strings.Contains(pattern, "{") {
+	if !strings.ContainsAny(pattern, "{*") {
 		return pattern == path
 	}
 
@@ -272,8 +272,12 @@ func matchPathPattern(pattern string, path string) bool {
 }
 
 func matchPathSegment(pattern string, value string) bool {
+	return matchPathSegmentFrom(pattern, value)
+}
+
+func matchPathSegmentFrom(pattern string, value string) bool {
 	for pattern != "" {
-		open := strings.IndexByte(pattern, '{')
+		open := strings.IndexAny(pattern, "{*")
 		if open < 0 {
 			return pattern == value
 		}
@@ -287,6 +291,19 @@ func matchPathSegment(pattern string, value string) bool {
 			continue
 		}
 
+		if pattern[0] == '*' {
+			pattern = pattern[1:]
+			if pattern == "" {
+				return true
+			}
+			for i := 0; i <= len(value); i++ {
+				if matchPathSegmentFrom(pattern, value[i:]) {
+					return true
+				}
+			}
+			return false
+		}
+
 		close := strings.IndexByte(pattern, '}')
 		if close <= 1 {
 			return false
@@ -295,19 +312,12 @@ func matchPathSegment(pattern string, value string) bool {
 		if pattern == "" {
 			return value != ""
 		}
-		nextOpen := strings.IndexByte(pattern, '{')
-		if nextOpen == 0 {
-			return false
+		for i := 1; i <= len(value); i++ {
+			if matchPathSegmentFrom(pattern, value[i:]) {
+				return true
+			}
 		}
-		literal := pattern
-		if nextOpen > 0 {
-			literal = pattern[:nextOpen]
-		}
-		next := strings.Index(value, literal)
-		if next <= 0 {
-			return false
-		}
-		value = value[next:]
+		return false
 	}
 	return value == ""
 }

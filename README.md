@@ -157,6 +157,16 @@ routes:
     content_type: application/json
 ```
 
+同一 path segment 内还可以使用 `*` 通配符；`*` 不跨 `/`，可匹配空字符串：
+
+```yaml
+routes:
+  - path: /v1beta*/models/{model}:streamGenerateContent
+    method: POST
+    response_file: v1beta/models/{model}:streamGenerateContent/text_real.sse
+    content_type: text/event-stream
+```
+
 ## 请求匹配
 
 同一路径和方法下可以声明多条 route，`http-mock` 会按配置顺序寻找第一条匹配项。

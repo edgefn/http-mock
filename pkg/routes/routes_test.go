@@ -224,6 +224,26 @@ func TestRouteMatchesTemplatePath(t *testing.T) {
 	}
 }
 
+func TestRouteMatchesWildcardPathSegment(t *testing.T) {
+	route := Route{Path: "/v1beta*/models/{model}:streamGenerateContent"}
+
+	if !route.MatchesPath("/v1beta/models/gemini-2.5-flash:streamGenerateContent") {
+		t.Fatalf("wildcard route should match empty wildcard text")
+	}
+	if !route.MatchesPath("/v1beta1/models/gemini-2.5-flash:streamGenerateContent") {
+		t.Fatalf("wildcard route should match text in the same segment")
+	}
+	if route.MatchesPath("/v1beta/extra/models/gemini-2.5-flash:streamGenerateContent") {
+		t.Fatalf("wildcard route should not match across path segments")
+	}
+	if route.MatchesPath("/v1beta1/models/:streamGenerateContent") {
+		t.Fatalf("template parameter should still require non-empty text")
+	}
+	if route.MatchesPath("/v1beta1/models/gemini-2.5-flash:generateContent") {
+		t.Fatalf("wildcard route should not match a different action")
+	}
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
