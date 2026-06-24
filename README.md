@@ -134,7 +134,7 @@ make build
 | `delay` | 否 | 固定响应延迟，使用 Go duration 格式，例如 `500ms`、`60s` |
 | `random_delay` | 否 | 额外随机响应延迟，包含 `min` 和 `max`，会叠加在 `delay` 后 |
 | `stream_delay` | 否 | SSE 响应的事件间隔，使用 Go duration 格式，仅对 `text/event-stream` 生效 |
-| `match` | 否 | 额外匹配条件，支持 header、query 或 JSONPath |
+| `match` | 否 | 额外匹配条件，支持 header、query、form、jwt_form、JSONPath，或用 `all` 组合多个条件 |
 
 服务会在请求进入时检查 `routes.yaml` 的修改时间；文件变更后会懒加载新路由，加载失败时继续沿用上一份可用配置并记录日志。`response_file` 内容每次请求都会重新读取。
 
@@ -214,6 +214,26 @@ routes:
     response_file: v1beta/models/{model}:streamGenerateContent/text_real.sse
     content_type: text/event-stream
 ```
+
+按 form 和 JWT assertion 形态匹配，适合 OAuth token endpoint：
+
+```yaml
+routes:
+  - path: /oauth2/token
+    method: POST
+    match:
+      all:
+        - header: Content-Type
+          equals: application/x-www-form-urlencoded
+        - form: grant_type
+          equals: urn:ietf:params:oauth:grant-type:jwt-bearer
+        - jwt_form: assertion
+    response_file: oauth2/token/mock.json
+    content_type: application/json
+```
+
+`match.all` 内的每一项都必须命中。`jwt_form` 会从 `application/x-www-form-urlencoded`
+body 中读取指定字段，并检查它是三段式 JWT，且 header 与 claims 段是合法 base64url JSON；它不校验签名。
 
 ## 响应内容
 

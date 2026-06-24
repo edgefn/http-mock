@@ -1,8 +1,11 @@
 package routes
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,10 +38,13 @@ type Route struct {
 }
 
 type Match struct {
-	Header   string `yaml:"header"`
-	Query    string `yaml:"query"`
-	JSONPath string `yaml:"json_path"`
-	Equals   string `yaml:"equals"`
+	Header   string  `yaml:"header"`
+	Query    string  `yaml:"query"`
+	Form     string  `yaml:"form"`
+	JWTForm  string  `yaml:"jwt_form"`
+	JSONPath string  `yaml:"json_path"`
+	Equals   string  `yaml:"equals"`
+	All      []Match `yaml:"all"`
 }
 
 type RandomDelay struct {
@@ -161,10 +167,27 @@ func (m *Match) validate(index int) error {
 	if m == nil {
 		return nil
 	}
-	if strings.TrimSpace(m.Header) == "" && strings.TrimSpace(m.Query) == "" && strings.TrimSpace(m.JSONPath) == "" {
-		return fmt.Errorf("routes[%d].match must define header, query, or json_path", index)
+	if len(m.All) > 0 {
+		for i := range m.All {
+			if err := m.All[i].validate(index); err != nil {
+				return fmt.Errorf("routes[%d].match.all[%d]: %w", index, i, err)
+			}
+		}
+		return nil
 	}
-	if strings.TrimSpace(m.Equals) == "" {
+	fields := 0
+	for _, value := range []string{m.Header, m.Query, m.Form, m.JWTForm, m.JSONPath} {
+		if strings.TrimSpace(value) != "" {
+			fields++
+		}
+	}
+	if fields == 0 {
+		return fmt.Errorf("routes[%d].match must define header, query, form, jwt_form, json_path, or all", index)
+	}
+	if fields > 1 {
+		return fmt.Errorf("routes[%d].match must define only one of header, query, form, jwt_form, or json_path", index)
+	}
+	if strings.TrimSpace(m.JWTForm) == "" && strings.TrimSpace(m.Equals) == "" {
 		return fmt.Errorf("routes[%d].match.equals is required", index)
 	}
 	return nil
@@ -235,11 +258,24 @@ func (m *Match) Matches(req *http.Request, body []byte) bool {
 	if m == nil {
 		return true
 	}
+	if len(m.All) > 0 {
+		for i := range m.All {
+			if !m.All[i].Matches(req, body) {
+				return false
+			}
+		}
+		return true
+	}
+	if field := strings.TrimSpace(m.JWTForm); field != "" {
+		return formFieldLooksLikeJWT(body, field)
+	}
 	var value string
 	if header := strings.TrimSpace(m.Header); header != "" {
 		value = req.Header.Get(header)
 	} else if query := strings.TrimSpace(m.Query); query != "" {
 		value = req.URL.Query().Get(query)
+	} else if form := strings.TrimSpace(m.Form); form != "" {
+		value = formFieldValue(body, form)
 	} else {
 		result := gjson.GetBytes(body, m.JSONPath)
 		if !result.Exists() {
@@ -251,6 +287,35 @@ func (m *Match) Matches(req *http.Request, body []byte) bool {
 		}
 	}
 	return value == m.Equals
+}
+
+func formFieldValue(body []byte, field string) string {
+	values, err := url.ParseQuery(string(body))
+	if err != nil {
+		return ""
+	}
+	return values.Get(field)
+}
+
+func formFieldLooksLikeJWT(body []byte, field string) bool {
+	raw := formFieldValue(body, field)
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	for i, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			return false
+		}
+		if i > 1 {
+			continue
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(part)
+		if err != nil || !json.Valid(decoded) {
+			return false
+		}
+	}
+	return true
 }
 
 func matchPathPattern(pattern string, path string) bool {

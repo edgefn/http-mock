@@ -72,6 +72,44 @@ routes:
 	}
 }
 
+func TestRouteMatchAllSupportsFormAndJWTForm(t *testing.T) {
+	dataRoot := t.TempDir()
+	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
+routes:
+  - path: /token
+    method: POST
+    match:
+      all:
+        - header: Content-Type
+          equals: application/x-www-form-urlencoded
+        - form: grant_type
+          equals: urn:ietf:params:oauth:grant-type:jwt-bearer
+        - jwt_form: assertion
+    body_inline: '{"access_token":"mock"}'
+    content_type: application/json
+`)
+
+	cfg, _, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/token", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	body := []byte("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=" + testJWTAssertion())
+	if !cfg.Routes[0].Allows(req, body) {
+		t.Fatalf("route should match valid form grant_type and jwt assertion")
+	}
+
+	badGrant := []byte("grant_type=refresh_token&assertion=" + testJWTAssertion())
+	if cfg.Routes[0].Allows(req, badGrant) {
+		t.Fatalf("route should not match wrong grant_type")
+	}
+	badAssertion := []byte("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=not-a-jwt")
+	if cfg.Routes[0].Allows(req, badAssertion) {
+		t.Fatalf("route should not match malformed assertion")
+	}
+}
+
 func TestLoadResponseBehaviorFields(t *testing.T) {
 	dataRoot := t.TempDir()
 	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
@@ -111,6 +149,10 @@ routes:
 	if !ok || minDelay != 2*time.Millisecond || maxDelay != 2*time.Millisecond {
 		t.Fatalf("RandomDelayRange()=(%s,%s,%v), want 2ms/2ms", minDelay, maxDelay, ok)
 	}
+}
+
+func testJWTAssertion() string {
+	return "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdmNAZXhhbXBsZS5jb20ifQ.signature"
 }
 
 func TestLoadRejectsInvalidResponseBehaviorFields(t *testing.T) {
