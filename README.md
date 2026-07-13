@@ -11,11 +11,11 @@
 
 </div>
 
-`http-mock` 用一个 `routes.yaml` 把请求映射到本地响应文件，适合在本地开发、集成测试、代理联调和离线回放中稳定复现上游 HTTP 响应。
+`http-mock` 用一个或多个 route YAML 文件把请求映射到本地响应文件，适合在本地开发、集成测试、代理联调和离线回放中稳定复现上游 HTTP 响应。
 
 它不会引入复杂的脚本 DSL。对外只保留两层概念：
 
-- `routes.yaml`：声明路径、方法、可选匹配规则和响应文件
+- route YAML：声明路径、方法、可选匹配规则和响应文件
 - 数据根目录：存放 JSON、SSE、音频等响应文件，可按 endpoint 分目录组织
 
 ## 特性
@@ -25,7 +25,7 @@
 - 请求匹配：支持按请求 header 或 JSONPath 选择不同 mock 响应。
 - 内容类型推断：内置 `.json`、`.sse`、`.mp3` 的常见 content type。
 - 响应行为：支持固定延迟、随机延迟、自定义响应 header、内联响应体和 SSE 事件间隔。
-- 配置校验：启动前检查 `routes.yaml` 和响应文件是否存在。
+- 配置校验：启动前检查 route YAML 和响应文件是否存在。
 - 容器友好：提供 Dockerfile，可直接构建镜像运行。
 
 ## 安装
@@ -96,7 +96,7 @@ curl -i http://127.0.0.1:18080/v1/chat/completions \
 
 ```bash
 http-mock serve \
-  --routes routes.yaml \
+  --routes 'routes/*.yaml' \
   --data-root ./http-mock-data \
   --listen :18080
 ```
@@ -105,22 +105,22 @@ http-mock serve \
 
 ```bash
 http-mock validate \
-  --routes routes.yaml \
+  --routes 'routes/*.yaml' \
   --data-root ./http-mock-data
 ```
 
 常用 Make 命令：
 
 ```bash
-make validate ROUTES=routes.yaml DATA_ROOT=../http-mock-data
-make run ROUTES=routes.yaml DATA_ROOT=../http-mock-data LISTEN=:18080
+make validate ROUTES='routes/*.yaml' DATA_ROOT=../http-mock-data
+make run ROUTES='routes/*.yaml' DATA_ROOT=../http-mock-data LISTEN=:18080
 make test
 make build
 ```
 
 ## 路由规则
 
-`routes.yaml` 顶层字段是 `routes`，每个路由支持：
+每个 route YAML 顶层字段都是 `routes`，每个路由支持：
 
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ make build
 | `stream_delay` | 否 | SSE 响应的事件间隔，使用 Go duration 格式，仅对 `text/event-stream` 生效 |
 | `match` | 否 | 额外匹配条件，支持 header、query、form、jwt_form、JSONPath，或用 `all` 组合多个条件 |
 
-服务会在请求进入时检查 `routes.yaml` 的修改时间；文件变更后会懒加载新路由，加载失败时继续沿用上一份可用配置并记录日志。`response_file` 内容每次请求都会重新读取。
+`--routes` 可传单个文件或 Go filepath glob（例如 `routes/*.yaml`）。glob 命中的文件按字典序合并，文件内顺序保持不变；服务会在请求进入时检查匹配文件集合，文件新增、删除或变更后会懒加载新路由，加载失败时继续沿用上一份可用配置并记录日志。`response_file` 内容每次请求都会重新读取。
 
 路径支持精确匹配：
 

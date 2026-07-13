@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 LISTEN ?= :18080
 DATA_ROOT ?= ../http-mock-data
-ROUTES ?= routes.yaml
+ROUTES ?= routes/*.yaml
 
 .PHONY: help fmt test build run validate
 
@@ -22,5 +22,5 @@ build: ## 编译检查
 run: ## 启动 http-mock 服务
 	go run ./cmd/http-mock serve --routes "$(ROUTES)" --data-root "$(DATA_ROOT)" --listen "$(LISTEN)"
 
-validate: ## 校验 routes.yaml 和 responses/*
+validate: ## 校验 routes YAML 文件和 responses/*
 	go run ./cmd/http-mock validate --routes "$(ROUTES)" --data-root "$(DATA_ROOT)"

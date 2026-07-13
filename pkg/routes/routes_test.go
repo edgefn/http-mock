@@ -72,6 +72,75 @@ routes:
 	}
 }
 
+func TestLoadGlobMergesFragmentsInLexicographicOrder(t *testing.T) {
+	dataRoot := t.TempDir()
+	writeFile(t, filepath.Join(dataRoot, "routes", "20-fallback.yaml"), `
+routes:
+  - path: /v1/responses
+    method: POST
+    response_file: responses/fallback.json
+`)
+	writeFile(t, filepath.Join(dataRoot, "routes", "10-match.yaml"), `
+routes:
+  - path: /v1/responses
+    method: POST
+    match:
+      json_path: stream
+      equals: "true"
+    response_file: responses/stream.sse
+    content_type: text/event-stream
+  - path: /v1/health
+    body_inline: ok
+`)
+	writeFile(t, filepath.Join(dataRoot, "responses", "fallback.json"), `{"ok":true}`)
+	writeFile(t, filepath.Join(dataRoot, "responses", "stream.sse"), "data: ok\n\n")
+
+	cfg, sources, err := Load(dataRoot, "routes/*.yaml")
+	if err != nil {
+		t.Fatalf("Load glob: %v", err)
+	}
+	if got, want := len(sources.Files), 2; got != want {
+		t.Fatalf("sources=%d want=%d", got, want)
+	}
+	if got, want := len(cfg.Routes), 3; got != want {
+		t.Fatalf("routes=%d want=%d", got, want)
+	}
+	if got, want := cfg.Routes[0].ResponseFile, "responses/stream.sse"; got != want {
+		t.Fatalf("first route response_file=%q want=%q", got, want)
+	}
+	if got, want := cfg.Routes[2].ResponseFile, "responses/fallback.json"; got != want {
+		t.Fatalf("last route response_file=%q want=%q", got, want)
+	}
+}
+
+func TestLoadGlobRejectsEmptyMatchAndInvalidFragment(t *testing.T) {
+	dataRoot := t.TempDir()
+	if _, _, err := Load(dataRoot, "routes/*.yaml"); err == nil || !strings.Contains(err.Error(), "matched no files") {
+		t.Fatalf("Load empty glob error=%v", err)
+	}
+
+	invalidPath := filepath.Join(dataRoot, "routes", "10-invalid.yaml")
+	writeFile(t, invalidPath, "not_routes: []\n")
+	if _, _, err := Load(dataRoot, "routes/*.yaml"); err == nil || !strings.Contains(err.Error(), invalidPath) || !strings.Contains(err.Error(), "top-level routes list") {
+		t.Fatalf("Load invalid fragment error=%v", err)
+	}
+}
+
+func TestLoadGlobIncludesFragmentPathForRouteValidationErrors(t *testing.T) {
+	dataRoot := t.TempDir()
+	invalidPath := filepath.Join(dataRoot, "routes", "10-invalid.yaml")
+	writeFile(t, invalidPath, `
+routes:
+  - path: /missing-response
+    method: GET
+    response_file: responses/missing.json
+`)
+
+	if _, _, err := Load(dataRoot, "routes/*.yaml"); err == nil || !strings.Contains(err.Error(), invalidPath) || !strings.Contains(err.Error(), "response_file") {
+		t.Fatalf("Load invalid route error=%v", err)
+	}
+}
+
 func TestRouteMatchAllSupportsFormAndJWTForm(t *testing.T) {
 	dataRoot := t.TempDir()
 	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `

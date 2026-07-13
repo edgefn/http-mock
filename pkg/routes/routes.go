@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,13 @@ import (
 
 type Config struct {
 	Routes []Route `yaml:"routes"`
+}
+
+// Sources identifies the route files used to build a Config. Files are sorted
+// by path so their order is also the route matching order across fragments.
+type Sources struct {
+	Files       []string
+	Fingerprint string
 }
 
 type Route struct {
@@ -35,6 +43,8 @@ type Route struct {
 	responsePath        string
 	delayDuration       time.Duration
 	streamDelayDuration time.Duration
+	sourcePath          string
+	sourceIndex         int
 }
 
 type Match struct {
@@ -55,21 +65,78 @@ type RandomDelay struct {
 	maxDuration time.Duration
 }
 
-func Load(dataRoot string, routesPath string) (*Config, string, error) {
-	resolvedPath := resolvePath(dataRoot, routesPath)
-	b, err := os.ReadFile(resolvedPath)
+func Load(dataRoot string, routesPath string) (*Config, Sources, error) {
+	sources, err := DiscoverSources(dataRoot, routesPath)
 	if err != nil {
-		return nil, "", err
+		return nil, Sources{}, err
+	}
+
+	var cfg Config
+	for _, source := range sources.Files {
+		fragment, err := loadFragment(source)
+		if err != nil {
+			return nil, Sources{}, err
+		}
+		for i := range fragment.Routes {
+			fragment.Routes[i].sourcePath = source
+			fragment.Routes[i].sourceIndex = i + 1
+		}
+		cfg.Routes = append(cfg.Routes, fragment.Routes...)
+	}
+	if err := cfg.Validate(dataRoot); err != nil {
+		return nil, Sources{}, err
+	}
+	return &cfg, sources, nil
+}
+
+// DiscoverSources resolves routesPath as either a route file or a filepath.Glob
+// pattern relative to dataRoot. A pattern must match at least one regular file.
+func DiscoverSources(dataRoot string, routesPath string) (Sources, error) {
+	resolvedPattern := resolvePath(dataRoot, routesPath)
+	files, err := filepath.Glob(resolvedPattern)
+	if err != nil {
+		return Sources{}, fmt.Errorf("invalid routes pattern %q: %w", routesPath, err)
+	}
+	if len(files) == 0 {
+		return Sources{}, fmt.Errorf("routes pattern %q matched no files", routesPath)
+	}
+	sort.Strings(files)
+
+	var fingerprint strings.Builder
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil {
+			return Sources{}, fmt.Errorf("stat routes file %q: %w", file, err)
+		}
+		if !info.Mode().IsRegular() {
+			return Sources{}, fmt.Errorf("routes file %q is not a regular file", file)
+		}
+		fmt.Fprintf(&fingerprint, "%s\x00%d\x00%d\x00", file, info.ModTime().UnixNano(), info.Size())
+	}
+	return Sources{Files: files, Fingerprint: fingerprint.String()}, nil
+}
+
+func loadFragment(path string) (Config, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, fmt.Errorf("read routes file %q: %w", path, err)
+	}
+
+	var raw struct {
+		Routes yaml.Node `yaml:"routes"`
+	}
+	if err := yaml.Unmarshal(b, &raw); err != nil {
+		return Config{}, fmt.Errorf("parse routes file %q: %w", path, err)
+	}
+	if raw.Routes.Kind != yaml.SequenceNode {
+		return Config{}, fmt.Errorf("routes file %q must contain a top-level routes list", path)
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(b, &cfg); err != nil {
-		return nil, "", err
+		return Config{}, fmt.Errorf("parse routes file %q: %w", path, err)
 	}
-	if err := cfg.Validate(dataRoot); err != nil {
-		return nil, "", err
-	}
-	return &cfg, resolvedPath, nil
+	return cfg, nil
 }
 
 func (c *Config) Validate(dataRoot string) error {
@@ -81,6 +148,9 @@ func (c *Config) Validate(dataRoot string) error {
 	}
 	for i := range c.Routes {
 		if err := c.Routes[i].validate(i, dataRoot); err != nil {
+			if c.Routes[i].sourcePath != "" {
+				return fmt.Errorf("routes file %q (routes[%d]): %w", c.Routes[i].sourcePath, c.Routes[i].sourceIndex, err)
+			}
 			return err
 		}
 	}

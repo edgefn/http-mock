@@ -156,6 +156,75 @@ routes:
 	}
 }
 
+func TestServer_ReloadsGlobRoutesWhenFragmentsChange(t *testing.T) {
+	dataRoot := t.TempDir()
+	routesDir := filepath.Join(dataRoot, "routes")
+	firstPath := filepath.Join(routesDir, "10-first.yaml")
+	writeFile(t, firstPath, `
+routes:
+  - path: /first
+    body_inline: first
+`)
+
+	srv, err := Load(dataRoot, "routes/*.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	assertRouteBody(t, srv, "/first", http.StatusOK, "first")
+
+	writeFile(t, firstPath, `
+routes:
+  - path: /first
+    body_inline: updated
+`)
+	forceModTime(t, firstPath, time.Now().Add(2*time.Second))
+	assertRouteBody(t, srv, "/first", http.StatusOK, "updated")
+
+	secondPath := filepath.Join(routesDir, "20-second.yaml")
+	writeFile(t, secondPath, `
+routes:
+  - path: /second
+    body_inline: second
+`)
+	assertRouteBody(t, srv, "/second", http.StatusOK, "second")
+
+	if err := os.Remove(secondPath); err != nil {
+		t.Fatalf("Remove(%s): %v", secondPath, err)
+	}
+	assertRouteBody(t, srv, "/second", http.StatusNotFound, "mock route not found\n")
+}
+
+func TestServer_KeepsGlobRoutesWhenReloadFails(t *testing.T) {
+	dataRoot := t.TempDir()
+	routesPath := filepath.Join(dataRoot, "routes", "10-routes.yaml")
+	writeFile(t, routesPath, `
+routes:
+  - path: /ok
+    body_inline: ok
+`)
+
+	srv, err := Load(dataRoot, "routes/*.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	writeFile(t, routesPath, "routes: invalid\n")
+	forceModTime(t, routesPath, time.Now().Add(2*time.Second))
+	assertRouteBody(t, srv, "/ok", http.StatusOK, "ok")
+}
+
+func assertRouteBody(t *testing.T, srv *Server, path string, wantStatus int, wantBody string) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	if got := rec.Code; got != wantStatus {
+		t.Fatalf("%s status=%d want=%d body=%q", path, got, wantStatus, rec.Body.String())
+	}
+	if got := rec.Body.String(); got != wantBody {
+		t.Fatalf("%s body=%q want=%q", path, got, wantBody)
+	}
+}
+
 func TestServer_KeepsPreviousRoutesWhenReloadFails(t *testing.T) {
 	dataRoot := t.TempDir()
 	routesPath := filepath.Join(dataRoot, "routes.yaml")

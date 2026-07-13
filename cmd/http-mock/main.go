@@ -42,7 +42,7 @@ func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	routesPath := fs.String("routes", "", "routes yaml path; relative paths are resolved under --data-root")
+	routesPath := fs.String("routes", "", "routes yaml file or glob; relative paths are resolved under --data-root")
 	profilePath := fs.String("profile", "", "deprecated alias of --routes")
 	dataRoot := fs.String("data-root", ".", "mock data root")
 	listen := fs.String("listen", ":18080", "listen address")
@@ -94,7 +94,7 @@ func runValidate(args []string) error {
 	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	routesPath := fs.String("routes", "", "routes yaml path; relative paths are resolved under --data-root")
+	routesPath := fs.String("routes", "", "routes yaml file or glob; relative paths are resolved under --data-root")
 	profilePath := fs.String("profile", "", "deprecated alias of --routes")
 	dataRoot := fs.String("data-root", ".", "mock data root")
 
@@ -119,8 +119,8 @@ func usageError() error {
 
 func usageText() string {
 	return `Usage:
-  http-mock serve --routes <routes-file> --data-root <dir> --listen :18080
-  http-mock validate --routes <routes-file> --data-root <dir>`
+  http-mock serve --routes <routes-file-or-glob> --data-root <dir> --listen :18080
+  http-mock validate --routes <routes-file-or-glob> --data-root <dir>`
 }
 
 func firstNonEmpty(values ...string) string {

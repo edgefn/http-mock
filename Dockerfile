@@ -20,4 +20,4 @@ WORKDIR /data
 EXPOSE 18080
 
 ENTRYPOINT ["http-mock"]
-CMD ["serve", "--routes", "routes.yaml", "--data-root", "/data", "--listen", ":18080"]
+CMD ["serve", "--routes", "routes/*.yaml", "--data-root", "/data", "--listen", ":18080"]

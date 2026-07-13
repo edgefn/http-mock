@@ -18,27 +18,21 @@ import (
 type Server struct {
 	dataRoot      string
 	routesPath    string
-	routesFile    string
-	routesModTime time.Time
+	routesSources routes.Sources
 
 	mu     sync.RWMutex
 	routes []routes.Route
 }
 
 func Load(dataRoot string, routesPath string) (*Server, error) {
-	cfg, routesFile, err := routes.Load(dataRoot, routesPath)
-	if err != nil {
-		return nil, err
-	}
-	info, err := os.Stat(routesFile)
+	cfg, sources, err := routes.Load(dataRoot, routesPath)
 	if err != nil {
 		return nil, err
 	}
 	return &Server{
 		dataRoot:      dataRoot,
 		routesPath:    routesPath,
-		routesFile:    routesFile,
-		routesModTime: info.ModTime(),
+		routesSources: sources,
 		routes:        cfg.Routes,
 	}, nil
 }
@@ -86,35 +80,35 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) reloadRoutesIfChanged() {
-	info, err := os.Stat(s.routesFile)
+	sources, err := routes.DiscoverSources(s.dataRoot, s.routesPath)
 	if err != nil {
-		log.Printf("http-mock reload routes stat failed path=%q: %v", s.routesFile, err)
+		log.Printf("http-mock reload routes discovery failed pattern=%q: %v", s.routesPath, err)
 		return
 	}
 
 	s.mu.RLock()
-	loadedModTime := s.routesModTime
-	unchanged := info.ModTime().Equal(loadedModTime)
+	loadedFingerprint := s.routesSources.Fingerprint
+	unchanged := sources.Fingerprint == loadedFingerprint
 	s.mu.RUnlock()
 	if unchanged {
 		return
 	}
 
-	cfg, routesFile, err := routes.Load(s.dataRoot, s.routesPath)
+	cfg, loadedSources, err := routes.Load(s.dataRoot, s.routesPath)
 	if err != nil {
-		log.Printf("http-mock reload routes failed path=%q: %v", s.routesFile, err)
+		log.Printf("http-mock reload routes failed pattern=%q: %v", s.routesPath, err)
 		return
 	}
 
 	s.mu.Lock()
-	if !s.routesModTime.Equal(loadedModTime) {
+	if s.routesSources.Fingerprint != loadedFingerprint {
 		s.mu.Unlock()
 		return
 	}
-	s.routesModTime = info.ModTime()
+	s.routesSources = loadedSources
 	s.routes = cfg.Routes
 	s.mu.Unlock()
-	log.Printf("http-mock reloaded routes path=%q", routesFile)
+	log.Printf("http-mock reloaded routes pattern=%q files=%d", s.routesPath, len(loadedSources.Files))
 }
 
 func (s *Server) routesSnapshot() []routes.Route {
