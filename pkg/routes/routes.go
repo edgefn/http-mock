@@ -393,17 +393,33 @@ func matchPathPattern(pattern string, path string) bool {
 		return pattern == path
 	}
 
-	patternSegments := strings.Split(pattern, "/")
-	pathSegments := strings.Split(path, "/")
-	if len(patternSegments) != len(pathSegments) {
+	return matchPathSegments(strings.Split(pattern, "/"), strings.Split(path, "/"))
+}
+
+func matchPathSegments(pattern []string, path []string) bool {
+	if len(pattern) == 0 {
+		return len(path) == 0
+	}
+	if optional, ok := optionalPathSegment(pattern[0]); ok {
+		if len(path) > 0 && path[0] == optional && matchPathSegments(pattern[1:], path[1:]) {
+			return true
+		}
+		return matchPathSegments(pattern[1:], path)
+	}
+	if len(path) == 0 || !matchPathSegment(pattern[0], path[0]) {
 		return false
 	}
-	for i := range patternSegments {
-		if !matchPathSegment(patternSegments[i], pathSegments[i]) {
-			return false
-		}
+	return matchPathSegments(pattern[1:], path[1:])
+}
+
+// optionalPathSegment recognizes a whole-segment optional literal, such as
+// `{?openai}` in `/{?openai}/v1/responses`.
+func optionalPathSegment(segment string) (string, bool) {
+	if !strings.HasPrefix(segment, "{?") || !strings.HasSuffix(segment, "}") {
+		return "", false
 	}
-	return true
+	literal := segment[2 : len(segment)-1]
+	return literal, literal != ""
 }
 
 func matchPathSegment(pattern string, value string) bool {

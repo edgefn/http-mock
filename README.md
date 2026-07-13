@@ -157,6 +157,16 @@ routes:
     content_type: application/json
 ```
 
+`{?literal}` 可将一个固定路径段设为可选。例如下面的 route 同时匹配 `/v1/responses` 和 `/openai/v1/responses`；该语法只能作为完整 path segment 使用：
+
+```yaml
+routes:
+  - path: /{?openai}/v1/responses
+    method: POST
+    response_file: v1/responses/mock.json
+    content_type: application/json
+```
+
 同一 path segment 内还可以使用 `*` 通配符；`*` 不跨 `/`，可匹配空字符串：
 
 ```yaml

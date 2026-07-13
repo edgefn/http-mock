@@ -141,6 +141,20 @@ routes:
 	}
 }
 
+func TestRouteMatchesOptionalLiteralPathSegment(t *testing.T) {
+	route := Route{Path: "/{?openai}/v1/responses"}
+	for _, path := range []string{"/v1/responses", "/openai/v1/responses"} {
+		if !route.MatchesPath(path) {
+			t.Errorf("MatchesPath(%q)=false, want true", path)
+		}
+	}
+	for _, path := range []string{"/azure/v1/responses", "/openai/openai/v1/responses", "/v1/responses/extra"} {
+		if route.MatchesPath(path) {
+			t.Errorf("MatchesPath(%q)=true, want false", path)
+		}
+	}
+}
+
 func TestRouteMatchAllSupportsFormAndJWTForm(t *testing.T) {
 	dataRoot := t.TempDir()
 	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
