@@ -36,10 +36,6 @@ jobs:
             echo "should_release=false" >> "$GITHUB_OUTPUT"
           fi
 
-  deploy-to-dev:
-    needs: verify-main
-    uses: edgefn/http-mock/.github/workflows/cd.yml@main
-
   release:
     needs: verify-main
     if: needs.verify-main.outputs.should_release == 'true'
@@ -111,3 +107,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  deploy-to-dev:
+    needs: release
+    uses: edgefn/http-mock/.github/workflows/cd.yml@main

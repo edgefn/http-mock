@@ -6,10 +6,9 @@ on:
 
 jobs:
   deploy-to-dev:
-    runs-on: [ mock ]
+    runs-on: [mock]
 
     steps:
-
       - name: Get latest tag via API
         id: get-tag
         run: |
@@ -17,6 +16,10 @@ jobs:
             |jq -r '.[0].name' | cut -d "v" -f 2 )
           echo "TAG=$TAG"
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+      # 等待10秒，确保release 完成后下载成功
+      - name: sleep 10s
+        run: sleep 10
 
       - name: deploy
         run: |
