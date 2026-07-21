@@ -63,7 +63,7 @@ func runServe(args []string) error {
 
 	httpSrv := &http.Server{
 		Addr:              *listen,
-		Handler:           srv,
+		Handler:           accessLog(srv, log.Default()),
 		ReadHeaderTimeout: *readHeaderTimeout,
 	}
 	log.Printf("http-mock serving routes=%q data_root=%q listen=%q", resolvedRoutes, *dataRoot, *listen)

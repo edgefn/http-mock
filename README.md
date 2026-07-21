@@ -118,6 +118,14 @@ make test
 make build
 ```
 
+`serve` 默认会为每个请求打印一行 Gin 风格的访问日志，包括响应状态码、完整处理耗时、客户端 IP、HTTP 方法和包含 query 的请求路径。例如：
+
+```text
+2026/07/21 14:32:10 [HTTP-MOCK] | 200 |        1.24ms |       127.0.0.1 | POST    "/v1/responses?stream=true"
+```
+
+访问日志不会记录请求体、响应体或 header。`validate` 只校验配置，不打印访问日志。
+
 ## 路由规则
 
 每个 route YAML 顶层字段都是 `routes`，每个路由支持：
