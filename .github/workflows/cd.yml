@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy-to-dev:
-    runs-on: [mock]
+    runs-on: outer
 
     steps:
       - name: Get latest tag via API
