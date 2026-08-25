@@ -1,0 +1,36 @@
+# Local env files
+.env
+.env.*
+!.env.example
+config.yaml
+
+# Build outputs
+bin/
+dist/
+build/
+__pycache__/
+tmp/
+*.log
+*.pid
+logs
+.cache
+.gocache
+# Go artifacts
+*.test
+*.out
+coverage.out
+*.prof
+.gomodcache
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.github/act_secret_file
+report.xml
+dumps/
+.claude/
+compose/local.override.yml
