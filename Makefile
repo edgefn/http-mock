@@ -5,7 +5,7 @@ LISTEN ?= :18080
 DATA_ROOT ?= ../http-mock-data
 ROUTES ?= routes/*.yaml
 
-.PHONY: help fmt test build run validate
+.PHONY: help fmt test test-race build ci run validate
 
 help: ## 显示常用命令
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_.-]+:.*## / {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -16,8 +16,13 @@ fmt: ## Go 代码格式化
 test: ## 运行测试
 	go test ./...
 
+test-race: ## 运行竞态检测测试
+	go test -race ./...
+
 build: ## 编译检查
 	go build ./cmd/http-mock
+
+ci: test test-race build ## 本地模拟 CI 核心检查
 
 run: ## 启动 http-mock 服务
 	go run ./cmd/http-mock serve --routes "$(ROUTES)" --data-root "$(DATA_ROOT)" --listen "$(LISTEN)"
