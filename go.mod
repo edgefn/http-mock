@@ -1,6 +1,6 @@
 module github.com/edgefn/http-mock
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/tidwall/gjson v1.18.0
