@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	cryptorand "crypto/rand"
 	"fmt"
 	"io"
 	"log"
@@ -126,6 +127,7 @@ func serveRoute(w http.ResponseWriter, r *http.Request, route routes.Route) erro
 	if err != nil {
 		return err
 	}
+	body = expandBodyVars(body)
 	if route.ContentType != "" {
 		w.Header().Set("Content-Type", route.ContentType)
 	}
@@ -174,6 +176,23 @@ func responseBody(route routes.Route) ([]byte, error) {
 		return []byte(body), nil
 	}
 	return os.ReadFile(route.ResponsePath())
+}
+
+// expandBodyVars replaces {{uuid}} placeholders with a fresh UUID v4 on each call.
+func expandBodyVars(body []byte) []byte {
+	if !bytes.Contains(body, []byte("{{uuid}}")) {
+		return body
+	}
+	return bytes.ReplaceAll(body, []byte("{{uuid}}"), []byte(newUUID()))
+}
+
+func newUUID() string {
+	var b [16]byte
+	_, _ = cryptorand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant bits
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func writeStreamBody(w http.ResponseWriter, r *http.Request, body []byte, delay time.Duration) error {
