@@ -350,6 +350,99 @@ routes:
 	}
 }
 
+func TestServer_UUIDTemplateProducesUniqueIDs(t *testing.T) {
+	dataRoot := t.TempDir()
+	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
+routes:
+  - path: /tasks
+    method: POST
+    body_inline: '{"id":"{{uuid}}","status":"queued"}'
+    content_type: application/json
+`)
+
+	srv, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	extractID := func() string {
+		rec := httptest.NewRecorder()
+		srv.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/tasks", nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("code=%d want 200", rec.Code)
+		}
+		body := rec.Body.String()
+		// body_inline literal {{uuid}} must not appear in the output
+		if strings.Contains(body, "{{uuid}}") {
+			t.Fatalf("{{uuid}} was not expanded: %s", body)
+		}
+		// extract the id value between the first pair of quotes after "id":"
+		const prefix = `"id":"`
+		start := strings.Index(body, prefix)
+		if start < 0 {
+			t.Fatalf("id field not found in body: %s", body)
+		}
+		rest := body[start+len(prefix):]
+		end := strings.IndexByte(rest, '"')
+		if end < 0 {
+			t.Fatalf("id value not terminated: %s", body)
+		}
+		return rest[:end]
+	}
+
+	id1 := extractID()
+	id2 := extractID()
+	if id1 == id2 {
+		t.Fatalf("{{uuid}} produced the same id on two calls: %s", id1)
+	}
+}
+
+func TestServer_PathLastTemplateEchoesLastSegment(t *testing.T) {
+	dataRoot := t.TempDir()
+	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
+routes:
+  - path: /tasks/{task_id}
+    method: GET
+    body_inline: '{"id":"{{path_last}}","status":"running"}'
+    content_type: application/json
+`)
+
+	srv, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/abc-123", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d want 200", rec.Code)
+	}
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"abc-123","status":"running"}`; got != want {
+		t.Fatalf("body=%q want %q", got, want)
+	}
+
+	// A different ID in the URL must produce a different id in the response.
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/xyz-456", nil))
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"xyz-456","status":"running"}`; got != want {
+		t.Fatalf("body=%q want %q", got, want)
+	}
+
+	// Segment containing '"' (%22): must be JSON-escaped so the body remains valid JSON.
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/a%22b", nil))
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"a\"b","status":"running"}`; got != want {
+		t.Fatalf(`quote-in-id body=%q want %q`, got, want)
+	}
+
+	// Segment containing '\' (%5C): must be escaped as '\\', not interpreted as a JSON escape.
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/a%5Cb", nil))
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"a\\b","status":"running"}`; got != want {
+		t.Fatalf(`backslash-in-id body=%q want %q`, got, want)
+	}
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

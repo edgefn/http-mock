@@ -2,6 +2,8 @@ package server
 
 import (
 	"bytes"
+	cryptorand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -126,6 +128,7 @@ func serveRoute(w http.ResponseWriter, r *http.Request, route routes.Route) erro
 	if err != nil {
 		return err
 	}
+	body = expandBodyVars(body, r)
 	if route.ContentType != "" {
 		w.Header().Set("Content-Type", route.ContentType)
 	}
@@ -174,6 +177,36 @@ func responseBody(route routes.Route) ([]byte, error) {
 		return []byte(body), nil
 	}
 	return os.ReadFile(route.ResponsePath())
+}
+
+// expandBodyVars replaces template placeholders in body:
+//   - {{uuid}}: a fresh UUID v4 on each call
+//   - {{path_last}}: the last path segment of the request URL (e.g. the task ID
+//     in /api/v3/.../tasks/{id}), enabling GET fixtures to echo back the ID
+//     that the caller received from a prior create response
+func expandBodyVars(body []byte, r *http.Request) []byte {
+	if bytes.Contains(body, []byte("{{uuid}}")) {
+		body = bytes.ReplaceAll(body, []byte("{{uuid}}"), []byte(newUUID()))
+	}
+	if bytes.Contains(body, []byte("{{path_last}}")) {
+		path := strings.TrimRight(r.URL.Path, "/")
+		last := path[strings.LastIndexByte(path, '/')+1:]
+		// JSON-encode the segment so characters like '"' and '\' don't break the
+		// surrounding JSON template. Marshal never errors for a valid Go string;
+		// strip the outer quotes since the placeholder sits inside "..." already.
+		quoted, _ := json.Marshal(last)
+		body = bytes.ReplaceAll(body, []byte("{{path_last}}"), quoted[1:len(quoted)-1])
+	}
+	return body
+}
+
+func newUUID() string {
+	var b [16]byte
+	_, _ = cryptorand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant bits
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func writeStreamBody(w http.ResponseWriter, r *http.Request, body []byte, delay time.Duration) error {
