@@ -427,6 +427,20 @@ routes:
 	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"xyz-456","status":"running"}`; got != want {
 		t.Fatalf("body=%q want %q", got, want)
 	}
+
+	// Segment containing '"' (%22): must be JSON-escaped so the body remains valid JSON.
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/a%22b", nil))
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"a\"b","status":"running"}`; got != want {
+		t.Fatalf(`quote-in-id body=%q want %q`, got, want)
+	}
+
+	// Segment containing '\' (%5C): must be escaped as '\\', not interpreted as a JSON escape.
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/a%5Cb", nil))
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"a\\b","status":"running"}`; got != want {
+		t.Fatalf(`backslash-in-id body=%q want %q`, got, want)
+	}
 }
 
 func writeFile(t *testing.T, path string, content string) {

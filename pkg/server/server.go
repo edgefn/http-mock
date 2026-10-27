@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	cryptorand "crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -190,7 +191,11 @@ func expandBodyVars(body []byte, r *http.Request) []byte {
 	if bytes.Contains(body, []byte("{{path_last}}")) {
 		path := strings.TrimRight(r.URL.Path, "/")
 		last := path[strings.LastIndexByte(path, '/')+1:]
-		body = bytes.ReplaceAll(body, []byte("{{path_last}}"), []byte(last))
+		// JSON-encode the segment so characters like '"' and '\' don't break the
+		// surrounding JSON template. Marshal never errors for a valid Go string;
+		// strip the outer quotes since the placeholder sits inside "..." already.
+		quoted, _ := json.Marshal(last)
+		body = bytes.ReplaceAll(body, []byte("{{path_last}}"), quoted[1:len(quoted)-1])
 	}
 	return body
 }
