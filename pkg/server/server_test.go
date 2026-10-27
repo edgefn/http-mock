@@ -397,6 +397,38 @@ routes:
 	}
 }
 
+func TestServer_PathLastTemplateEchoesLastSegment(t *testing.T) {
+	dataRoot := t.TempDir()
+	writeFile(t, filepath.Join(dataRoot, "routes.yaml"), `
+routes:
+  - path: /tasks/{task_id}
+    method: GET
+    body_inline: '{"id":"{{path_last}}","status":"running"}'
+    content_type: application/json
+`)
+
+	srv, err := Load(dataRoot, "routes.yaml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/abc-123", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d want 200", rec.Code)
+	}
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"abc-123","status":"running"}`; got != want {
+		t.Fatalf("body=%q want %q", got, want)
+	}
+
+	// A different ID in the URL must produce a different id in the response.
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/tasks/xyz-456", nil))
+	if got, want := strings.TrimSpace(rec.Body.String()), `{"id":"xyz-456","status":"running"}`; got != want {
+		t.Fatalf("body=%q want %q", got, want)
+	}
+}
+
 func writeFile(t *testing.T, path string, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

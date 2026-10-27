@@ -127,7 +127,7 @@ func serveRoute(w http.ResponseWriter, r *http.Request, route routes.Route) erro
 	if err != nil {
 		return err
 	}
-	body = expandBodyVars(body)
+	body = expandBodyVars(body, r)
 	if route.ContentType != "" {
 		w.Header().Set("Content-Type", route.ContentType)
 	}
@@ -178,12 +178,21 @@ func responseBody(route routes.Route) ([]byte, error) {
 	return os.ReadFile(route.ResponsePath())
 }
 
-// expandBodyVars replaces {{uuid}} placeholders with a fresh UUID v4 on each call.
-func expandBodyVars(body []byte) []byte {
-	if !bytes.Contains(body, []byte("{{uuid}}")) {
-		return body
+// expandBodyVars replaces template placeholders in body:
+//   - {{uuid}}: a fresh UUID v4 on each call
+//   - {{path_last}}: the last path segment of the request URL (e.g. the task ID
+//     in /api/v3/.../tasks/{id}), enabling GET fixtures to echo back the ID
+//     that the caller received from a prior create response
+func expandBodyVars(body []byte, r *http.Request) []byte {
+	if bytes.Contains(body, []byte("{{uuid}}")) {
+		body = bytes.ReplaceAll(body, []byte("{{uuid}}"), []byte(newUUID()))
 	}
-	return bytes.ReplaceAll(body, []byte("{{uuid}}"), []byte(newUUID()))
+	if bytes.Contains(body, []byte("{{path_last}}")) {
+		path := strings.TrimRight(r.URL.Path, "/")
+		last := path[strings.LastIndexByte(path, '/')+1:]
+		body = bytes.ReplaceAll(body, []byte("{{path_last}}"), []byte(last))
+	}
+	return body
 }
 
 func newUUID() string {
