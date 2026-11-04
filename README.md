@@ -336,7 +336,7 @@ routes:
 ## GitHub Actions
 
 - push 到 `main` 或向 `main` 提交 PR：运行测试和 Go 编译检查，不构建或推送容器镜像。
-- 容器镜像只在版本 tag 发布流程中构建，平台为 `linux/amd64`；不再更新 `edge` 和 `sha-*` 标签，已有标签保留历史内容。
+- 容器镜像只在版本 tag 发布流程中构建，保留 `linux/amd64` 和 `linux/arm64` 双架构；不再更新 `edge` 和 `sha-*` 标签，已有标签保留历史内容。
 - push `v*` tag：发布 GitHub Release 二进制产物，并发布 `latest`、semver 和 tag 镜像。
 
 ## License
