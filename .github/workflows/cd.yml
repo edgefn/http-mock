@@ -6,7 +6,8 @@ on:
 
 jobs:
   deploy-to-dev:
-    runs-on: outer
+    runs-on:
+      group: outer
 
     steps:
       - name: Get latest tag via API
