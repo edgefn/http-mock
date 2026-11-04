@@ -202,7 +202,13 @@ func expandBodyVars(body []byte, r *http.Request) []byte {
 
 func newUUID() string {
 	var b [16]byte
-	_, _ = cryptorand.Read(b[:])
+	if _, err := cryptorand.Read(b[:]); err != nil {
+		u1, u2 := rand.Uint64(), rand.Uint64()
+		for i := range 8 {
+			b[i] = byte(u1 >> (i * 8))
+			b[i+8] = byte(u2 >> (i * 8))
+		}
+	}
 	b[6] = (b[6] & 0x0f) | 0x40 // version 4
 	b[8] = (b[8] & 0x3f) | 0x80 // variant bits
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
